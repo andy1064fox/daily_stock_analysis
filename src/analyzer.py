@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-===================================
-台股自選股智能分析系统 - AI分析层 (繁體中文特化 🛡️防呆強固版)
-===================================
-"""
 import json
 import logging
 import time
@@ -154,17 +149,14 @@ class AnalysisResult:
 class GeminiAnalyzer:
     SYSTEM_PROMPT = """【系統最高指令】：你是一位專注於趨勢交易的「台股」投資分析師，接下來的所有思考、分析與最終輸出的報告內容，請絕對、務必使用「繁體中文（zh-TW）」撰寫，並使用台灣股市習慣用語（例如：做多進場、做多出場、減碼、停損、本益比等）。
 
-## 核心交易理念（必須嚴格遵守）
-1. 嚴進策略：股價偏離 MA5 超過 5% 時，堅決不買入。乖離率 < 2% 為最佳買點區間。
-2. 趨勢交易：多頭排列必須條件為 MA5 > MA10 > MA20。空頭排列堅決不碰。
-3. 效率優先：關注籌碼集中度。
-4. 買點偏好：最佳買點為縮量回踩 MA5 獲得支撐。
-5. 風險排查：減持、業績預虧、監管處罰。
-6. 估值關注：關注本益比（PE）是否合理。
+## 核心交易理念
+1. 嚴進策略：股價偏離 MA5 超過 5% 時堅決不買入。乖離率 < 2% 為最佳買點。
+2. 趨勢交易：多頭排列必須條件為 MA5 > MA10 > MA20。
+3. 買點偏好：縮量回踩 MA5 獲得支撐。跌破 MA20 觀望。
+4. 風險排查：關注大股東減持、業績預虧。
 
-## 輸出格式：決策儀表板 JSON
-請嚴格按照以下 JSON 格式輸出，這是一個完整的【決策儀表板】：
-```json
+## 輸出格式
+請嚴格按照以下 JSON 格式輸出：
 {
     "stock_name": "股票中文名稱",
     "sentiment_score": 50,
@@ -203,166 +195,169 @@ class GeminiAnalyzer:
     },
     "analysis_summary": "摘要"
 }
-def __init__(self, api_key: Optional[str] = None):
-    self._router = None
-    self._litellm_available = False
-    self._init_litellm()
+"""
 
-def _has_channel_config(self, config: Config) -> bool:
-    return bool(config.llm_model_list) and not all(
-        e.get('model_name', '').startswith('__legacy_') for e in config.llm_model_list
-    )
+    def __init__(self, api_key: Optional[str] = None):
+        self._router = None
+        self._litellm_available = False
+        self._init_litellm()
 
-def _init_litellm(self) -> None:
-    config = get_config()
-    litellm_model = config.litellm_model
-    if not litellm_model: return
-    self._litellm_available = True
-
-    if self._has_channel_config(config):
-        self._router = Router(model_list=config.llm_model_list, routing_strategy="simple-shuffle", num_retries=2)
-        return
-
-    keys = get_api_keys_for_model(litellm_model, config)
-    if len(keys) > 1:
-        extra_params = extra_litellm_params(litellm_model, config)
-        self._router = Router(
-            model_list=[{"model_name": litellm_model, "litellm_params": {"model": litellm_model, "api_key": k, **extra_params}} for k in keys],
-            routing_strategy="simple-shuffle", num_retries=2
+    def _has_channel_config(self, config: Config) -> bool:
+        return bool(config.llm_model_list) and not all(
+            e.get('model_name', '').startswith('__legacy_') for e in config.llm_model_list
         )
 
-def is_available(self) -> bool:
-    return self._router is not None or self._litellm_available
+    def _init_litellm(self) -> None:
+        config = get_config()
+        litellm_model = config.litellm_model
+        if not litellm_model: return
+        self._litellm_available = True
 
-def _call_litellm(self, prompt: str, generation_config: dict) -> Tuple[str, str]:
-    config = get_config()
-    max_tokens = generation_config.get('max_output_tokens') or 8192
-    temperature = generation_config.get('temperature', 0.7)
-    models_to_try = [m for m in [config.litellm_model] + (config.litellm_fallback_models or []) if m]
-    use_channel_router = self._has_channel_config(config)
-    last_error = None
-    
-    for model in models_to_try:
-        try:
-            call_kwargs = {
-                "model": model,
-                "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
-                "temperature": temperature, "max_tokens": max_tokens
-            }
-            extra = get_thinking_extra_body(model.split("/")[-1] if "/" in model else model)
-            if extra: call_kwargs["extra_body"] = extra
+        if self._has_channel_config(config):
+            self._router = Router(model_list=config.llm_model_list, routing_strategy="simple-shuffle", num_retries=2)
+            return
 
-            if use_channel_router and self._router:
-                response = self._router.completion(**call_kwargs)
-            elif self._router and model == config.litellm_model:
-                response = self._router.completion(**call_kwargs)
-            else:
-                keys = get_api_keys_for_model(model, config)
-                if keys: call_kwargs["api_key"] = keys[0]
-                call_kwargs.update(extra_litellm_params(model, config))
-                response = litellm.completion(**call_kwargs)
-
-            if response and response.choices and response.choices[0].message.content:
-                return (response.choices[0].message.content, model)
-        except Exception as e:
-            last_error = e
-            continue
-    raise Exception(f"All LLM models failed. Last error: {last_error}")
-
-def generate_text(self, prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> Optional[str]:
-    try:
-        res = self._call_litellm(prompt, {"max_tokens": max_tokens, "temperature": temperature})
-        return res[0] if isinstance(res, tuple) else res
-    except Exception:
-        return None
-
-def analyze(self, context: Dict[str, Any], news_context: Optional[str] = None) -> AnalysisResult:
-    code = context.get('code', 'Unknown')
-    config = get_config()
-    
-    if config.gemini_request_delay > 0:
-        time.sleep(config.gemini_request_delay)
-    
-    name = context.get('stock_name')
-    if not name or name.startswith('股票'):
-        name = context.get('realtime', {}).get('name') or STOCK_NAME_MAP.get(code, f'股票{code}')
-    
-    if not self.is_available():
-        return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', analysis_summary='AI 分析未啟用', success=False)
-    
-    try:
-        prompt = self._format_prompt(context, name, news_context)
-        response_text, model_used = self._call_litellm(prompt, {"temperature": config.gemini_temperature, "max_output_tokens": 8192})
-        result = self._parse_response(response_text, code, name)
-        result.raw_response = response_text
-        result.search_performed = bool(news_context)
-        result.market_snapshot = self._build_market_snapshot(context)
-        result.model_used = model_used
-        return result
-    except Exception as e:
-        return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', analysis_summary=f'分析出錯: {str(e)[:100]}', success=False, error_message=str(e))
-
-def _format_prompt(self, context: Dict[str, Any], name: str, news_context: Optional[str] = None) -> str:
-    code = context.get('code', 'Unknown')
-    stock_name = STOCK_NAME_MAP.get(code, name)
-    today = context.get('today', {})
-    
-    prompt = f"# 決策儀表板分析請求\n\n## 📊 基礎資訊\n代碼: {code} | 名稱: {stock_name}\n"
-    prompt += f"收盤價: {today.get('close', 'N/A')} | MA5: {today.get('ma5', 'N/A')} | MA20: {today.get('ma20', 'N/A')}\n"
-    
-    if 'realtime' in context:
-        prompt += f"量比: {context['realtime'].get('volume_ratio', 'N/A')} | 本益比: {context['realtime'].get('pe_ratio', 'N/A')}\n"
-        
-    prompt += "\n## 📰 輿情情報\n" + (news_context if news_context else "無新聞")
-    prompt += "\n請生成完整 JSON 決策儀表板，必須使用繁體中文！"
-    return prompt
-
-def _format_price(self, value: Optional[float]) -> str:
-    return f"{float(value):.2f}" if value is not None else 'N/A'
-
-def _build_market_snapshot(self, context: Dict[str, Any]) -> Dict[str, Any]:
-    return {"date": context.get('date', '未知'), "close": self._format_price(context.get('today', {}).get('close'))}
-
-def _parse_response(self, response_text: str, code: str, name: str) -> AnalysisResult:
-    try:
-        cleaned = response_text.split('```json')[1].split('```')[0] if '```json' in response_text else response_text.replace('```', '')
-        start = cleaned.find('{')
-        end = cleaned.rfind('}') + 1
-        if start >= 0 and end > start:
-            json_str = repair_json(cleaned[start:end])
-            data = json.loads(json_str) if isinstance(json_str, str) else json_str
-            if not isinstance(data, dict): raise ValueError("Parsed JSON is not a dict")
-            
-            op = data.get('operation_advice', '觀望')
-            if op in ['買入', '加仓', '做多進場', '加碼']: dt = 'buy'
-            elif op in ['賣出', '减仓', '做多出場', '減碼', '停損']: dt = 'sell'
-            else: dt = 'hold'
-            
-            score = data.get('sentiment_score', 50)
-            try: score = int(score) if score is not None else 50
-            except: score = 50
-            
-            return AnalysisResult(
-                code=code, name=data.get('stock_name', name), sentiment_score=score,
-                trend_prediction=data.get('trend_prediction', '震盪'), operation_advice=op,
-                decision_type=dt, confidence_level=data.get('confidence_level', '中'),
-                dashboard=data.get('dashboard'), analysis_summary=data.get('analysis_summary', '分析完成'), success=True
+        keys = get_api_keys_for_model(litellm_model, config)
+        if len(keys) > 1:
+            extra_params = extra_litellm_params(litellm_model, config)
+            self._router = Router(
+                model_list=[{"model_name": litellm_model, "litellm_params": {"model": litellm_model, "api_key": k, **extra_params}} for k in keys],
+                routing_strategy="simple-shuffle", num_retries=2
             )
-    except Exception:
-        pass
-    
-    text_lower = response_text.lower()
-    pos = sum(1 for kw in ['看多', '進場', 'buy'] if kw in text_lower)
-    neg = sum(1 for kw in ['看空', '出場', 'sell'] if kw in text_lower)
-    if pos > neg: return AnalysisResult(code=code, name=name, sentiment_score=65, trend_prediction='看多', operation_advice='做多進場', decision_type='buy')
-    if neg > pos: return AnalysisResult(code=code, name=name, sentiment_score=35, trend_prediction='看空', operation_advice='做多出場', decision_type='sell')
-    return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', decision_type='hold')
 
-def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 2.0) -> List[AnalysisResult]:
-    results = []
-    for i, context in enumerate(contexts):
-        if i > 0: time.sleep(delay_between)
-        results.append(self.analyze(context))
-    return results
+    def is_available(self) -> bool:
+        return self._router is not None or self._litellm_available
+
+    def _call_litellm(self, prompt: str, generation_config: dict) -> Tuple[str, str]:
+        config = get_config()
+        max_tokens = generation_config.get('max_output_tokens') or 8192
+        temperature = generation_config.get('temperature', 0.7)
+        models_to_try = [m for m in [config.litellm_model] + (config.litellm_fallback_models or []) if m]
+        use_channel_router = self._has_channel_config(config)
+        last_error = None
+        
+        for model in models_to_try:
+            try:
+                call_kwargs = {
+                    "model": model,
+                    "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+                    "temperature": temperature, "max_tokens": max_tokens
+                }
+                extra = get_thinking_extra_body(model.split("/")[-1] if "/" in model else model)
+                if extra: call_kwargs["extra_body"] = extra
+
+                if use_channel_router and self._router:
+                    response = self._router.completion(**call_kwargs)
+                elif self._router and model == config.litellm_model:
+                    response = self._router.completion(**call_kwargs)
+                else:
+                    keys = get_api_keys_for_model(model, config)
+                    if keys: call_kwargs["api_key"] = keys[0]
+                    call_kwargs.update(extra_litellm_params(model, config))
+                    response = litellm.completion(**call_kwargs)
+
+                if response and response.choices and response.choices[0].message.content:
+                    return (response.choices[0].message.content, model)
+            except Exception as e:
+                last_error = e
+                continue
+        raise Exception(f"All LLM models failed. Last error: {last_error}")
+
+    def generate_text(self, prompt: str, max_tokens: int = 2048, temperature: float = 0.7) -> Optional[str]:
+        try:
+            res = self._call_litellm(prompt, {"max_tokens": max_tokens, "temperature": temperature})
+            return res[0] if isinstance(res, tuple) else res
+        except Exception:
+            return None
+
+    def analyze(self, context: Dict[str, Any], news_context: Optional[str] = None) -> AnalysisResult:
+        code = context.get('code', 'Unknown')
+        config = get_config()
+        
+        if config.gemini_request_delay > 0:
+            time.sleep(config.gemini_request_delay)
+        
+        name = context.get('stock_name')
+        if not name or name.startswith('股票'):
+            name = context.get('realtime', {}).get('name') or STOCK_NAME_MAP.get(code, f'股票{code}')
+        
+        if not self.is_available():
+            return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', analysis_summary='AI 分析未啟用', success=False)
+        
+        try:
+            prompt = self._format_prompt(context, name, news_context)
+            response_text, model_used = self._call_litellm(prompt, {"temperature": config.gemini_temperature, "max_output_tokens": 8192})
+            result = self._parse_response(response_text, code, name)
+            result.raw_response = response_text
+            result.search_performed = bool(news_context)
+            result.market_snapshot = self._build_market_snapshot(context)
+            result.model_used = model_used
+            return result
+        except Exception as e:
+            return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', analysis_summary=f'分析出錯: {str(e)[:100]}', success=False, error_message=str(e))
+    
+    def _format_prompt(self, context: Dict[str, Any], name: str, news_context: Optional[str] = None) -> str:
+        code = context.get('code', 'Unknown')
+        stock_name = STOCK_NAME_MAP.get(code, name)
+        today = context.get('today', {})
+        
+        prompt = f"# 決策儀表板分析請求\n\n## 📊 基礎資訊\n代碼: {code} | 名稱: {stock_name}\n"
+        prompt += f"收盤價: {today.get('close', 'N/A')} | MA5: {today.get('ma5', 'N/A')} | MA20: {today.get('ma20', 'N/A')}\n"
+        
+        if 'realtime' in context:
+            prompt += f"量比: {context['realtime'].get('volume_ratio', 'N/A')} | 本益比: {context['realtime'].get('pe_ratio', 'N/A')}\n"
+            
+        prompt += "\n## 📰 輿情情報\n" + (news_context if news_context else "無新聞")
+        prompt += "\n請生成完整 JSON 決策儀表板，必須使用繁體中文！"
+        return prompt
+    
+    def _format_price(self, value: Optional[float]) -> str:
+        return f"{float(value):.2f}" if value is not None else 'N/A'
+
+    def _build_market_snapshot(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        return {"date": context.get('date', '未知'), "close": self._format_price(context.get('today', {}).get('close'))}
+
+    def _parse_response(self, response_text: str, code: str, name: str) -> AnalysisResult:
+        try:
+            cleaned = response_text.split('```json')[1].split('```')[0] if '```json' in response_text else response_text.replace('```', '')
+            start = cleaned.find('{')
+            end = cleaned.rfind('}') + 1
+            if start >= 0 and end > start:
+                json_str = repair_json(cleaned[start:end])
+                data = json.loads(json_str) if isinstance(json_str, str) else json_str
+                if not isinstance(data, dict): raise ValueError("Parsed JSON is not a dict")
+                
+                op = data.get('operation_advice', '觀望')
+                if op in ['買入', '加仓', '做多進場', '加碼']: dt = 'buy'
+                elif op in ['賣出', '减仓', '做多出場', '減碼', '停損']: dt = 'sell'
+                else: dt = 'hold'
+                
+                score = data.get('sentiment_score', 50)
+                try: score = int(score) if score is not None else 50
+                except: score = 50
+                
+                return AnalysisResult(
+                    code=code, name=data.get('stock_name', name), sentiment_score=score,
+                    trend_prediction=data.get('trend_prediction', '震盪'), operation_advice=op,
+                    decision_type=dt, confidence_level=data.get('confidence_level', '中'),
+                    dashboard=data.get('dashboard'), analysis_summary=data.get('analysis_summary', '分析完成'), success=True
+                )
+        except Exception:
+            pass
+        
+        text_lower = response_text.lower()
+        pos = sum(1 for kw in ['看多', '進場', 'buy'] if kw in text_lower)
+        neg = sum(1 for kw in ['看空', '出場', 'sell'] if kw in text_lower)
+        if pos > neg: return AnalysisResult(code=code, name=name, sentiment_score=65, trend_prediction='看多', operation_advice='做多進場', decision_type='buy')
+        if neg > pos: return AnalysisResult(code=code, name=name, sentiment_score=35, trend_prediction='看空', operation_advice='做多出場', decision_type='sell')
+        return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', decision_type='hold')
+
+    def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 2.0) -> List[AnalysisResult]:
+        results = []
+        for i, context in enumerate(contexts):
+            if i > 0: time.sleep(delay_between)
+            results.append(self.analyze(context))
+        return results
+
 def get_analyzer() -> GeminiAnalyzer:
-return GeminiAnalyzer()
+    return GeminiAnalyzer()

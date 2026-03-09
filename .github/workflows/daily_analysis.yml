@@ -1,10 +1,9 @@
 name: 每日股票分析
 
 on:
-  # 定時觸發 - 每天台北時間 14:30 (UTC 06:30)
+  # 定时触发 - 每天台北時間 14:30 (UTC 06:30)
   schedule:
-    - cron: '30 6 * * 1-5'     # 週一到週五，UTC 06:30 = 台北時間 14:30
-  
+    - cron: '30 6 * * 1-5'     # 周一到周五，UTC 06:30 = 台北時間 14:30
   # 手动触发
   workflow_dispatch:
     inputs:
@@ -37,25 +36,25 @@ jobs:
     steps:
       - name: 随机延迟（避免固定时间访问）
         run: sleep $((RANDOM % 60))  # 随机延迟0-60秒启动
-      
+        
       - name: 检出代码
         uses: actions/checkout@v4
-      
+        
       - name: 设置 Python 环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-      
+          
       - name: 安装依赖
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-      
+          
       - name: 创建必要目录
         run: |
           mkdir -p data logs reports
-      
+          
       - name: 执行股票分析
         env:
           # ==========================================
@@ -69,16 +68,14 @@ jobs:
           
           # AIHubMix（优先于 OPENAI_API_KEY，自动适配 base_url，推荐国内用户）
           AIHUBMIX_KEY: ${{ secrets.AIHUBMIX_KEY }}
-
           # OpenAI 兼容 API（备选）
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || secrets.OPENAI_MODEL }}
-
           # Anthropic / Claude
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || secrets.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022' }}
-
+          
           # ==========================================
           # 数据源
           # ==========================================
@@ -133,18 +130,18 @@ jobs:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_FOLDER_TOKEN: ${{ secrets.FEISHU_FOLDER_TOKEN }}
-
+          
           # 方式十：AstrBot
           ASTRBOT_URL: ${{ secrets.ASTRBOT_URL }}
           ASTRBOT_TOKEN: ${{ secrets.ASTRBOT_TOKEN }}
-
+          
           # 方式十一：Server酱3
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-
+          
           # ==========================================
           # 自选股配置
           # ==========================================
-          STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '2330,0050,0052' }}
+          STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '2330.TW' }}
           MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'tw' }}
           
           # ==========================================
@@ -161,8 +158,10 @@ jobs:
           # ==========================================
           LOG_LEVEL: INFO
           MAX_WORKERS: ${{ vars.MAX_WORKERS || secrets.MAX_WORKERS || '1' }}
+          
           # GitHub Actions 环境建议关闭不稳定的数据源
           ENABLE_CHIP_DISTRIBUTION: 'false'
+          
           # 实时行情数据源优先级（腾讯有量比且稳定，推荐首选）
           # 可选值: tencent, akshare_sina, efinance, akshare_em, tushare
           # 如果有 Tushare Pro 高积分账号，可将 tushare 放在首位
@@ -171,6 +170,7 @@ jobs:
         run: |
           # 判断运行模式
           MODE="${{ github.event.inputs.mode || 'full' }}"
+          
           echo "=========================================="
           echo "🚀 台股自選股智能分析系統"
           echo "=========================================="
@@ -208,7 +208,7 @@ jobs:
             FORCE_RUN_ARG="--force-run"
             echo "⚡ 已启用强制运行模式（跳过交易日检查）"
           fi
-
+          
           # 执行分析
           if [ "$MODE" = "market-only" ]; then
             python main.py --market-review $FORCE_RUN_ARG
@@ -217,7 +217,7 @@ jobs:
           else
             python main.py $FORCE_RUN_ARG
           fi
-      
+          
       - name: 上传分析报告
         uses: actions/upload-artifact@v4
         if: always()
@@ -227,7 +227,7 @@ jobs:
             reports/
             logs/
           retention-days: 30
-      
+          
       - name: 显示运行结果
         if: always()
         run: |

@@ -339,9 +339,12 @@ class GeminiAnalyzer:
     # 核心模块：核心结论 + 数据透视 + 舆情情报 + 作战计划
     # ========================================
 
-    SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析师，负责生成专业的【决策仪表盘】分析报告。
+    SYSTEM_PROMPT = """你是一位專注於趨勢交易的「台股」投資分析師，負責生成專業的【決策儀表板】分析報告。
+【重要指令】：請務必使用「繁體中文 (Traditional Chinese)」進行所有文字輸出與分析！
 
-## 核心交易理念（必须严格遵守）
+## 核心交易理念（必須嚴格遵守）
+（保留原本的交易理念...）
+
 
 ### 1. 严进策略（不追高）
 - **绝对不追高**：当股价偏离 MA5 超过 5% 时，坚决不买入
@@ -391,7 +394,7 @@ class GeminiAnalyzer:
     "stock_name": "股票中文名称",
     "sentiment_score": 0-100整数,
     "trend_prediction": "强烈看多/看多/震荡/看空/强烈看空",
-    "operation_advice": "买入/加仓/持有/减仓/卖出/观望",
+    "operation_advice": "做多進場 / 觀望 / 減碼 / 做多出場",
     "decision_type": "buy/hold/sell",
     "confidence_level": "高/中/低",
 

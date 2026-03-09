@@ -168,7 +168,7 @@ jobs:
           # 如果有 Tushare Pro 高积分账号，可将 tushare 放在首位
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
           
-          run: |
+         run: |
           # 判断运行模式
           MODE="${{ github.event.inputs.mode || 'full' }}"
           echo "=========================================="

@@ -17,8 +17,8 @@ class YfinanceFetcher(BaseFetcher):
 
     def _fetch_raw_data(self, stock_code: str, start_date: str, end_date: str) -> pd.DataFrame:
         try:
-            # yfinance 需要多抓幾天才能算 MA20，所以我們往前多推 40 天
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(days=40)
+            # 往前推 60 天以確保 MA20/MA10 能夠完美計算
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(days=60)
             start_date_yf = start_dt.strftime("%Y-%m-%d")
             
             end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
@@ -53,6 +53,23 @@ class YfinanceFetcher(BaseFetcher):
         
         return df[['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']]
 
+    def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """計算均線與量比，修復 0 或 N/A 的問題"""
+        df = df.copy()
+        df['ma5'] = df['close'].rolling(window=5, min_periods=1).mean()
+        df['ma10'] = df['close'].rolling(window=10, min_periods=1).mean()
+        df['ma20'] = df['close'].rolling(window=20, min_periods=1).mean()
+        
+        avg_volume_5 = df['volume'].rolling(window=5, min_periods=1).mean()
+        df['volume_ratio'] = df['volume'] / avg_volume_5.shift(1)
+        df['volume_ratio'] = df['volume_ratio'].fillna(1.0)
+        
+        for col in ['ma5', 'ma10', 'ma20', 'volume_ratio']:
+            if col in df.columns:
+                df[col] = df[col].round(2)
+        
+        return df
+
     def get_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         try:
             ticker = yf.Ticker(stock_code)
@@ -75,7 +92,6 @@ class YfinanceFetcher(BaseFetcher):
             change_pct = (change / previous_close * 100) if previous_close else 0.0
             amplitude = ((high_price - low_price) / previous_close * 100) if previous_close else 0.0
             
-            # 強制使用中文名稱映射
             name = STOCK_NAME_MAP.get(stock_code, stock_code)
 
             quote = UnifiedRealtimeQuote(
@@ -103,5 +119,4 @@ class YfinanceFetcher(BaseFetcher):
             return None
 
     def get_stock_name(self, stock_code: str) -> str:
-        # 強制返回字典裡的中文名稱
         return STOCK_NAME_MAP.get(stock_code, stock_code)

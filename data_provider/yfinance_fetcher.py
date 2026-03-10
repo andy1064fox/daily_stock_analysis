@@ -100,9 +100,9 @@ class YfinanceFetcher(BaseFetcher):
                 current_price=current_price,
                 change=change,
                 change_pct=change_pct,
-                open_price=open_price,
-                high_price=high_price,
-                low_price=low_price,
+                open_price=open_price,   # 補上開盤價
+                high_price=high_price,   # 補上最高價
+                low_price=low_price,     # 補上最低價
                 volume=volume,
                 amount=volume * current_price,
                 turnover_rate=None, 

@@ -21,7 +21,8 @@ class YfinanceFetcher(BaseFetcher):
             start_dt = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(days=60)
             start_date_yf = start_dt.strftime("%Y-%m-%d")
             
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            # yfinance 結束日期不包含，必須加 1 天
+            end_dt = datetime.now() + timedelta(days=1)
             end_date_yf = end_dt.strftime("%Y-%m-%d")
             
             logger.info(f"Yfinance 请求历史数据: {stock_code}")
@@ -38,6 +39,7 @@ class YfinanceFetcher(BaseFetcher):
 
     def _normalize_data(self, df: pd.DataFrame, stock_code: str) -> pd.DataFrame:
         df = df.copy()
+        # 強制轉換日期格式，確保系統能認出 "今天"
         date_col = 'Date' if 'Date' in df.columns else 'Datetime'
         df['date'] = pd.to_datetime(df[date_col]).dt.tz_localize(None).dt.strftime('%Y-%m-%d')
         
@@ -54,7 +56,6 @@ class YfinanceFetcher(BaseFetcher):
         return df[['date', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_chg']]
 
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """計算均線與量比，修復 0 或 N/A 的問題"""
         df = df.copy()
         df['ma5'] = df['close'].rolling(window=5, min_periods=1).mean()
         df['ma10'] = df['close'].rolling(window=10, min_periods=1).mean()
@@ -100,9 +101,9 @@ class YfinanceFetcher(BaseFetcher):
                 current_price=current_price,
                 change=change,
                 change_pct=change_pct,
-                open_price=open_price,   # 補上開盤價
-                high_price=high_price,   # 補上最高價
-                low_price=low_price,     # 補上最低價
+                open_price=open_price,
+                high_price=high_price,
+                low_price=low_price,
                 volume=volume,
                 amount=volume * current_price,
                 turnover_rate=None, 

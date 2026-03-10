@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+===================================
+台股自選股智能分析系统 - AI分析层 (繁體中文特化 🛡️防呆強固版)
+===================================
+"""
 import json
 import logging
 import time
@@ -19,6 +24,7 @@ logger = logging.getLogger(__name__)
 STOCK_NAME_MAP = {
     '2330.TW': '台積電',
     '0050.TW': '元大台灣50',
+    '0052.TW': '富邦科技',
     '2317.TW': '鴻海',
     '2454.TW': '聯發科',
 }
@@ -352,7 +358,7 @@ class GeminiAnalyzer:
         if neg > pos: return AnalysisResult(code=code, name=name, sentiment_score=35, trend_prediction='看空', operation_advice='做多出場', decision_type='sell')
         return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', decision_type='hold')
 
-   def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 65.0) -> List[AnalysisResult]:
+    def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 65.0) -> List[AnalysisResult]:
         """批量分析，加入強制 65 秒冷卻以防 Gemini 速率限制 (Rate Limit)"""
         results = []
         for i, context in enumerate(contexts):

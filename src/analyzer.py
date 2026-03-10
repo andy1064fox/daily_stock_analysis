@@ -352,10 +352,13 @@ class GeminiAnalyzer:
         if neg > pos: return AnalysisResult(code=code, name=name, sentiment_score=35, trend_prediction='看空', operation_advice='做多出場', decision_type='sell')
         return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', decision_type='hold')
 
-    def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 2.0) -> List[AnalysisResult]:
+    def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 16.0) -> List[AnalysisResult]:
+        """批量分析，加入強制 16 秒冷卻以防 Gemini 速率限制 (Rate Limit)"""
         results = []
         for i, context in enumerate(contexts):
-            if i > 0: time.sleep(delay_between)
+            if i > 0:
+                logger.info(f"防限流保護：等待 {delay_between} 秒後分析下一檔...")
+                time.sleep(delay_between)
             results.append(self.analyze(context))
         return results
 

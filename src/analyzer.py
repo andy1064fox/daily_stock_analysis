@@ -352,8 +352,8 @@ class GeminiAnalyzer:
         if neg > pos: return AnalysisResult(code=code, name=name, sentiment_score=35, trend_prediction='看空', operation_advice='做多出場', decision_type='sell')
         return AnalysisResult(code=code, name=name, sentiment_score=50, trend_prediction='震盪', operation_advice='觀望', decision_type='hold')
 
-    def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 30.0) -> List[AnalysisResult]:
-        """批量分析，加入強制 30 秒冷卻以防 Gemini 速率限制，並具備自動重試機制"""
+   def batch_analyze(self, contexts: List[Dict[str, Any]], delay_between: float = 65.0) -> List[AnalysisResult]:
+        """批量分析，加入強制 65 秒冷卻以防 Gemini 速率限制 (Rate Limit)"""
         results = []
         for i, context in enumerate(contexts):
             if i > 0:
@@ -365,19 +365,17 @@ class GeminiAnalyzer:
             for attempt in range(max_retries):
                 try:
                     result = self.analyze(context)
-                    # 如果結果裡出現 RateLimitError 字眼，當作失敗處理並重試
                     if result.error_message and "RateLimitError" in result.error_message:
-                        raise Exception("RateLimitError detected in response")
+                        raise Exception("RateLimitError")
                     results.append(result)
-                    break  # 成功就跳出重試迴圈
+                    break
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        wait_time = (attempt + 1) * 20  # 遞增等待: 20s, 40s
-                        logger.warning(f"分析失敗，{wait_time}秒後進行第 {attempt+1} 次重試... 錯誤: {e}")
+                        wait_time = 30  # 如果失敗，多等30秒
+                        logger.warning(f"分析失敗，{wait_time}秒後重試... 錯誤: {e}")
                         time.sleep(wait_time)
                     else:
-                        logger.error(f"分析徹底失敗，已達最大重試次數。")
-                        results.append(self.analyze(context)) # 存入失敗的結果
+                        results.append(self.analyze(context))
         return results
 
 def get_analyzer() -> GeminiAnalyzer:
